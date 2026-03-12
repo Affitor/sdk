@@ -1,0 +1,63 @@
+{
+  "name": "@affitor/tracker",
+  "version": "1.0.0",
+  "description": "Affitor affiliate tracking SDK for JavaScript applications",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Affitor/affitor-tracker-js.git"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./pure": {
+      "types": "./dist/pure.d.ts",
+      "import": "./dist/pure.mjs",
+      "require": "./dist/pure.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "affitor",
+    "affiliate",
+    "tracking",
+    "analytics",
+    "saas",
+    "partner"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}
