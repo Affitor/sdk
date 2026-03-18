@@ -17,7 +17,7 @@
  *   const affitor = useAffitor();
  *
  *   const handleSignup = async (user) => {
- *     affitor?.trackLead({ email: user.email, user_id: user.id });
+ *     await affitor?.signup(user.id, user.email);
  *   };
  * }
  * ```
@@ -38,9 +38,9 @@ import type { AffitorInstance, AffitorInitOptions } from './types';
 export type {
   AffitorInstance,
   AffitorInitOptions,
+  TrackSignupData,
   TrackLeadData,
   TrackTestData,
-  RedirectToCheckoutParams,
 } from './types';
 export type { AffitorEnv, LoadAffitorOptions } from './loader';
 
@@ -92,7 +92,7 @@ export function AffitorProvider({
  * @example
  * ```ts
  * const affitor = useAffitor();
- * affitor?.trackLead({ email, user_id });
+ * await affitor?.signup(customerId, email);
  * ```
  */
 export function useAffitor(): AffitorInstance | null {
@@ -106,7 +106,7 @@ export function useAffitor(): AffitorInstance | null {
  * @example
  * ```ts
  * const affitor = useLoadAffitor('123', { debug: true });
- * affitor?.trackLead({ email, user_id });
+ * await affitor?.signup(customerId, email);
  * ```
  */
 export function useLoadAffitor(

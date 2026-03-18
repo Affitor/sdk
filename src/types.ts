@@ -3,35 +3,38 @@ export interface AffitorInitOptions {
   debug?: boolean;
 }
 
+export interface TrackSignupData {
+  customer_key: string;
+  email: string;
+}
+
 export interface TrackLeadData {
   email: string;
-  user_id: string;
+  user_id?: string;
+  customer_key?: string;
   additional_data?: Record<string, unknown>;
 }
 
 export interface TrackTestData {
   step_id?: string;
   message?: string;
-  user_id?: string;
-}
-
-export interface RedirectToCheckoutParams {
-  price?: number;
-  programId?: string | number;
-  [key: string]: unknown;
+  customer_key?: string;
 }
 
 export interface AffitorInstance {
   init(options: AffitorInitOptions): void;
-  trackLead(data: TrackLeadData): void;
+  signup(customerKey: string, email: string): Promise<void>;
+  /** @deprecated Use signup() instead. Kept for backward compatibility. */
+  trackLead(data: TrackLeadData): Promise<void>;
+  getClickId(): string | null;
+  getData(): { clickId: string | null; programId: number; hasAttribution: boolean; affiliateUrl: string | null };
   trackTest(data?: TrackTestData): void;
-  redirectToCheckout(params: RedirectToCheckoutParams): void;
-  customerCode: string | null;
+  clickId: string | null;
   affiliateUrl: string | null;
   hasAffiliateAttribution: boolean;
   debugMode: boolean;
   programId: number;
-  loaded?: boolean;
+  loaded: boolean;
 }
 
 declare global {

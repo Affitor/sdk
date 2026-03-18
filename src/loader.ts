@@ -60,7 +60,7 @@ export function loadAffitor(
       return;
     }
 
-    // Already have a script tag
+    // Check for existing script
     const existing = document.querySelector('script[data-affitor-program-id]');
     if (existing && window.affitor) {
       resolve(window.affitor);

@@ -71,7 +71,8 @@ Once loaded, the `affitor` instance provides these methods:
 
 | Method | Description |
 |---|---|
-| `trackLead(data)` | Track a lead (signup) event. Requires `email` and `user_id`. |
+| `signup(customerKey, email)` | Track a signup event. Takes the user's ID and email as positional args. Returns a Promise. |
+| `trackLead(data)` | **Deprecated.** Alias for `signup()`. Accepts `{ email, user_id }`. Use `signup()` instead. |
 | `trackTest(data?)` | Send a test event to verify tracking is working. |
 | `redirectToCheckout(params)` | Redirect the user to the Affitor-powered checkout page. |
 
@@ -85,7 +86,7 @@ Once loaded, the `affitor` instance provides these methods:
 | `debugMode` | `boolean` | Whether debug mode is enabled |
 | `programId` | `number` | The advertiser program ID |
 
-### Example: Track Lead on Signup
+### Example: Track Signup
 
 ```ts
 import { loadAffitor } from '@affitor/tracker';
@@ -94,13 +95,10 @@ async function handleSignup(email: string, password: string) {
   // 1. Create the user account
   const { data } = await supabase.auth.signUp({ email, password });
 
-  // 2. Track the lead — awaits script load, guaranteed to fire
+  // 2. Track the signup — awaits script load, guaranteed to fire
   if (data.user) {
     const affitor = await loadAffitor('59');
-    affitor?.trackLead({
-      email: data.user.email,
-      user_id: data.user.id,
-    });
+    await affitor?.signup(data.user.id, data.user.email);
   }
 
   // 3. Navigate to dashboard
@@ -166,7 +164,7 @@ function ReferralBadge() {
 
 Returns `AffitorInstance | null`. Returns `null` while the SDK is loading.
 
-> **Important:** `useAffitor()` is best for reading tracker state in the UI (e.g. `hasAffiliateAttribution`, `customerCode`). For critical tracking events like `trackLead`, use `await loadAffitor()` directly instead — see [Which approach should I use?](#which-approach-should-i-use) below.
+> **Important:** `useAffitor()` is best for reading tracker state in the UI (e.g. `hasAffiliateAttribution`, `customerCode`). For critical tracking events like `signup`, use `await loadAffitor()` directly instead — see [Which approach should I use?](#which-approach-should-i-use) below.
 
 ### Pattern B: `useLoadAffitor()` (Standalone)
 
@@ -190,18 +188,18 @@ function MyComponent() {
 
 ## Which approach should I use?
 
-### For tracking events (`trackLead`, `redirectToCheckout`)
+### For tracking events (`signup`, `redirectToCheckout`)
 
 Always use `await loadAffitor()` directly. This guarantees the script is loaded before the event fires. Critical events must never be silently skipped.
 
 ```ts
 // GOOD — guaranteed to fire
 const affitor = await loadAffitor('59');
-affitor?.trackLead({ email, user_id });
+await affitor?.signup(userId, email);
 
 // BAD — affitor could be null if script still loading
 const affitor = useAffitor();
-affitor?.trackLead({ email, user_id }); // silently skipped if null
+await affitor?.signup(userId, email); // silently skipped if null
 ```
 
 ### For reading tracker state in UI
@@ -218,7 +216,7 @@ return affitor?.hasAffiliateAttribution ? <Badge /> : null;
 
 | Use Case | Approach | Why |
 |---|---|---|
-| `trackLead` on signup | `await loadAffitor()` | Must not be lost — awaits script load |
+| `signup` on registration | `await loadAffitor()` | Must not be lost — awaits script load |
 | `redirectToCheckout` | `await loadAffitor()` | Must not be lost — awaits script load |
 | Show referral badge in UI | `useAffitor()` | OK to show nothing while loading |
 | Display customer code | `useAffitor()` | OK to show nothing while loading |
@@ -254,7 +252,7 @@ import { loadAffitor } from '@affitor/tracker';
 
 // No timing issues — awaits script load automatically
 const affitor = await loadAffitor('59');
-affitor?.trackLead({ email, user_id });
+await affitor?.signup(userId, email);
 ```
 
 No more:
@@ -282,7 +280,8 @@ No more:
 
 | Method / Property | Type | Description |
 |---|---|---|
-| `trackLead(data)` | `(data: TrackLeadData) => void` | Track a lead event |
+| `signup(customerKey, email)` | `(customerKey: string, email: string) => Promise<void>` | Track a signup event |
+| `trackLead(data)` | `(data: TrackLeadData) => void` | **Deprecated.** Alias for `signup()`. |
 | `trackTest(data?)` | `(data?: TrackTestData) => void` | Send test event |
 | `redirectToCheckout(params)` | `(params: RedirectToCheckoutParams) => void` | Redirect to checkout |
 | `customerCode` | `string \| null` | Affiliate customer code |

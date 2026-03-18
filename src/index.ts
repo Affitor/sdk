@@ -1,5 +1,5 @@
 /**
- * @affitor/tracker
+ * @affitor/tracker v2
  *
  * Affitor affiliate tracking SDK for JavaScript applications.
  *
@@ -11,7 +11,7 @@
  * import { loadAffitor } from '@affitor/tracker';
  *
  * const affitor = await loadAffitor('123');
- * affitor?.trackLead({ email: 'user@example.com', user_id: 'u_1' });
+ * await affitor?.signup('customer_123', 'user@example.com');
  * ```
  *
  * For deferred loading (script injected only when you call loadAffitor),
@@ -26,7 +26,7 @@ export type { AffitorEnv, LoadAffitorOptions } from './loader';
 export type {
   AffitorInstance,
   AffitorInitOptions,
+  TrackSignupData,
   TrackLeadData,
   TrackTestData,
-  RedirectToCheckoutParams,
 } from './types';
