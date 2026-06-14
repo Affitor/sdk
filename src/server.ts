@@ -1,154 +1,96 @@
 /**
- * @affitor/sdk/server — Node fetch client for the Affitor v1 tracking API.
+ * @affitor/sdk/server — Affitor server-side SDK (Node).
  *
- * Server-side counterpart to the browser SDK. Authenticates with a program
- * api_token (Bearer) and calls the real v1 endpoints:
- *   - POST /api/v1/track/lead          (trackLead)
- *   - POST /api/v1/track/sale          (trackSale)
- *   - POST /api/v1/track/refund        (trackRefund)
- *   - POST /api/v1/track/click         (trackClick — public, no auth)
- *   - GET  /api/v1/programs/me/readiness (readiness)
+ * A faithful port of `affitor-node`: `@affitor/sdk/server` IS affitor-node's
+ * API, so existing affitor-node users can swap the import and nothing else.
  *
- * Uses the global `fetch` (Node 18+). No `window`/DOM access — server only.
- * Never ship the program API key to a browser.
+ * Typed, Bearer-authenticated client over the Affitor conversion API
+ * (`/api/v1/track/{click,lead,sale,refund}`). Use it from your backend to
+ * report leads + sales for ANY payment provider (Stripe, Polar, Lemon Squeezy,
+ * Paddle, …). Attribution model (Dub-style): bind the customer at lead time,
+ * then a sale needs only `customerExternalId`.
+ *
+ *   const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
+ *   await affitor.trackLead({ customerExternalId: user.id, clickId });
+ *   await affitor.trackSale({ customerExternalId: user.id, amount: 4999, invoiceId: inv.id });
+ *
+ * Plus one method affitor-node lacks — `readiness()` — the 5-gate
+ * machine-verifiable verdict an agent polls during agent-native onboarding.
+ *
+ * Server-side only — never ship the program API key to a browser. Uses the
+ * global `fetch` (Node 18+); no `window`/DOM access.
  *
  * @example
  * ```ts
- * import { Affitor } from '@affitor/sdk/server';
+ * import Affitor from '@affitor/sdk/server';            // default import
+ * import { Affitor } from '@affitor/sdk/server';        // named import — both work
  *
- * const affitor = new Affitor(process.env.AFFITOR_API_KEY!);
- * await affitor.trackSale({ transaction_id: 'txn_1', click_id: 'clk_1', amount_cents: 4900 });
+ * const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
+ * await affitor.trackSale({ customerExternalId: 'u_1', amount: 4900, invoiceId: 'inv_1' });
  * ```
  */
 
-const DEFAULT_API_BASE = 'https://api.affitor.com';
+const DEFAULT_API_URL = 'https://api.affitor.com';
 
-export interface AffitorServerOptions {
-  /** Override the tracking API base. Defaults to https://api.affitor.com. */
-  apiBase?: string;
+export interface AffitorOptions {
+  /** Program API key (Bearer). Server-side only. */
+  apiKey: string;
+  /** API base override. Defaults to https://api.affitor.com */
+  apiUrl?: string;
   /** Custom fetch (testing, or Node < 18 without global fetch). */
   fetch?: typeof fetch;
 }
 
-// ── Request param types (grounded in v1-tracking.ts) ────────────────────────
-
-/** POST /api/v1/track/lead body (v1-tracking.ts:404, 619). */
-export interface TrackLeadParams {
-  /** Advertiser's unique customer identifier. One of customer_key / click_id required. */
-  customer_key?: string;
-  /** Affitor click id (from the browser cookie). */
-  click_id?: string;
-  /** Customer email (hashed server-side). */
+export interface TrackLeadInput {
+  /** Advertiser's own user id — binds this customer to the click. */
+  customerExternalId?: string;
+  /** Affitor click id (from the `affitor_click_id` cookie). One of clickId / customerExternalId required. */
+  clickId?: string;
   email?: string;
-  /** Full click-id history this browser accumulated (shadow-lane candidates). */
-  click_ids?: string[];
-  session_id?: string;
-  page_url?: string;
-  /**
-   * Free-form passthrough (e.g. `{ event_name, test_mode, program_id }`).
-   *
-   * Integration-test fields (used by the onboarding wizard's synthetic
-   * verification path):
-   *   - `test_mode?: boolean` — marks the event as a synthetic test chain.
-   *   - `program_id?: number` — target program for the synthetic verification.
-   */
-  additional_data?: Record<string, unknown>;
+  eventName?: string;
+  additionalData?: Record<string, unknown>;
 }
 
-/** POST /api/v1/track/sale body (v1-tracking.ts:688-701). */
-export interface TrackSaleParams {
-  /** Unique processor transaction id (dedup / idempotency key). Required. */
-  transaction_id: string;
-  /** Sale amount in the smallest currency unit (cents). Required, > 0. */
-  amount_cents: number;
-  /** Resolve the customer by key and/or click id. */
-  customer_key?: string;
-  click_id?: string;
-  /** ISO 4217 currency code. Defaults server-side to 'USD'. */
+export interface TrackSaleInput {
+  /** Advertiser's own user id — resolves attribution (no clickId needed once bound at lead time). */
+  customerExternalId?: string;
+  clickId?: string;
+  /** Sale amount in integer cents. */
+  amount: number;
+  /** ISO currency (default USD). */
   currency?: string;
-  /** 'payment' | 'subscription'. Defaults server-side to 'payment'. */
-  sale_type?: 'payment' | 'subscription';
-  line_items?: unknown;
-  is_recurring?: boolean;
-  subscription_id?: string;
-  subscription_interval?: 'monthly' | 'quarterly' | 'annual';
-  product_id?: string;
-  /**
-   * Free-form passthrough.
-   *
-   * Integration-test fields (used by the onboarding wizard's synthetic
-   * verification path):
-   *   - `test_mode?: boolean` — marks the event as a synthetic test chain.
-   *   - `program_id?: number` — target program for the synthetic verification.
-   */
-  additional_data?: Record<string, unknown>;
+  /** Idempotency key — dedups retries. */
+  invoiceId: string;
+  saleType?: 'payment' | 'subscription';
+  isRecurring?: boolean;
+  subscriptionId?: string;
+  subscriptionInterval?: 'monthly' | 'quarterly' | 'annual';
+  eventName?: string;
 }
 
-/** POST /api/v1/track/refund body (v1-tracking.ts:1143). */
-export interface TrackRefundParams {
-  /** transaction_id of the original sale. Required. */
-  transaction_id: string;
-  /** Refund amount in cents. Omit (or 0) for a full refund. */
-  refund_amount_cents?: number;
-  refund_reason?: string;
+export interface TrackClickInput {
+  affiliateUrl?: string;
+  pageUrl?: string;
+  referrerUrl?: string;
+  existingClickId?: string;
 }
 
-/**
- * POST /api/v1/track/click body — public endpoint, no auth.
- * Normally done in the browser via the loader; exposed here for parity with
- * affitor-node so a backend can mint a click id when needed.
- */
-export interface TrackClickParams {
-  affiliate_url?: string;
-  page_url?: string;
-  referrer_url?: string;
-  /** Reuse an existing click id instead of minting a new one. */
-  existing_click_id?: string;
-  /**
-   * Free-form passthrough (the CMS click handler destructures it).
-   *
-   * Integration-test fields (used by the onboarding wizard's synthetic
-   * verification path):
-   *   - `test_mode?: boolean` — marks the event as a synthetic test chain.
-   *   - `program_id?: number` — target program for the synthetic verification.
-   */
-  additional_data?: Record<string, unknown>;
+export interface TrackRefundInput {
+  /** The sale's idempotency key (the `invoiceId` you passed to trackSale). */
+  invoiceId: string;
+  /** Refund amount in integer cents. Omit (or 0) = full refund → commission reversed; partial → refunded. */
+  refundAmountCents?: number;
+  refundReason?: string;
 }
 
-// ── Response types ──────────────────────────────────────────────────────────
-
-export interface TrackLeadResult {
-  success: boolean;
-  provisional?: boolean;
-  message?: string;
+export interface AffitorResponse<T = unknown> {
+  ok: boolean;
+  status: number;
+  data: T | null;
+  error?: string;
 }
 
-export interface TrackSaleResult {
-  success: boolean;
-  /** Present when the sale was attributed and recorded. */
-  sale_id?: number | null;
-  commission_id?: number | null;
-  /** Present (false) when the attribution window had expired. */
-  attributed?: boolean;
-  reason?: string;
-  click_age_days?: number;
-  window_days?: number;
-  message?: string;
-}
-
-export interface TrackRefundResult {
-  success: boolean;
-  status?: string;
-  commission_id?: number;
-  message?: string;
-  [key: string]: unknown;
-}
-
-export interface TrackClickResult {
-  success: boolean;
-  click_id?: string;
-  [key: string]: unknown;
-}
+// ── Readiness (the one method affitor-node lacks) ────────────────────────────
 
 export type GateStatus = 'pass' | 'fail' | 'unknown';
 export type TestChainStatus = 'attributed' | 'unattributed' | 'wrong_partner' | 'pending';
@@ -176,12 +118,16 @@ export interface ReadinessResult {
   poll: { retry_after_seconds: number };
 }
 
-// ── Error ───────────────────────────────────────────────────────────────────
+// ── Error ────────────────────────────────────────────────────────────────────
 
 /**
- * Thrown on a non-2xx response. Surfaces both error shapes the API returns:
+ * Typed error surfacing both error envelope shapes the API returns:
  *   - tracking endpoints:  { error: "message string" }
  *   - readiness endpoint:  { error: { code, message, retry_after_seconds? } }
+ *
+ * Thrown by `readiness()` on a non-2xx response. The `track*` methods never
+ * throw on HTTP errors (affitor-node parity — they resolve an `AffitorResponse`
+ * with `ok:false`); their `error` string is parsed by the same logic.
  */
 export class AffitorApiError extends Error {
   readonly status: number;
@@ -190,122 +136,210 @@ export class AffitorApiError extends Error {
   readonly body: unknown;
 
   constructor(status: number, body: unknown) {
-    const { code, message, retryAfterSeconds } = AffitorApiError.parse(body, status);
-    super(message);
+    const parsed = parseApiError(body, status);
+    super(parsed.message);
     this.name = 'AffitorApiError';
     this.status = status;
-    this.code = code;
-    this.retryAfterSeconds = retryAfterSeconds;
+    this.code = parsed.code;
+    this.retryAfterSeconds = parsed.retryAfterSeconds;
     this.body = body;
-  }
-
-  private static parse(
-    body: unknown,
-    status: number,
-  ): { code?: string; message: string; retryAfterSeconds?: number } {
-    const err = (body as { error?: unknown })?.error;
-    if (typeof err === 'string') {
-      return { message: err };
-    }
-    if (err && typeof err === 'object') {
-      const e = err as { code?: string; message?: string; retry_after_seconds?: number };
-      return {
-        code: e.code,
-        message: e.message ?? `Request failed with status ${status}`,
-        retryAfterSeconds: e.retry_after_seconds,
-      };
-    }
-    return { message: `Request failed with status ${status}` };
   }
 }
 
-// ── Client ──────────────────────────────────────────────────────────────────
+/**
+ * Parse both error envelope shapes into `{ code?, message, retryAfterSeconds? }`.
+ *   - string `{ error: "..." }`
+ *   - object `{ error: { code, message, retry_after_seconds? } }`
+ */
+function parseApiError(
+  body: unknown,
+  status: number,
+): { code?: string; message: string; retryAfterSeconds?: number } {
+  const err = (body as { error?: unknown })?.error;
+  if (typeof err === 'string') {
+    return { message: err };
+  }
+  if (err && typeof err === 'object') {
+    const e = err as { code?: string; message?: string; retry_after_seconds?: number };
+    return {
+      code: e.code,
+      message: e.message ?? `Request failed with status ${status}`,
+      retryAfterSeconds: e.retry_after_seconds,
+    };
+  }
+  return { message: `Request failed with status ${status}` };
+}
+
+/** Drop undefined values so the wire payload stays clean. */
+function compact(obj: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out;
+}
+
+// ── Client ────────────────────────────────────────────────────────────────────
 
 export class Affitor {
   private readonly apiKey: string;
-  private readonly apiBase: string;
+  private readonly apiUrl: string;
   private readonly fetchImpl: typeof fetch;
 
-  /**
-   * @param apiKey Program API key (Bearer). Server-side only.
-   * @param opts   Optional `{ apiBase, fetch }` overrides.
-   */
-  constructor(apiKey: string, opts: AffitorServerOptions = {}) {
-    if (typeof apiKey !== 'string') {
-      throw new Error(
-        'Affitor: pass the API key as a string — new Affitor(apiKey), not new Affitor({ apiKey }). (Changed from affitor-node.)',
-      );
-    }
-    if (!apiKey) throw new Error('Affitor: an api key is required');
-    this.apiKey = apiKey;
-    this.apiBase = (opts.apiBase ?? DEFAULT_API_BASE).replace(/\/+$/, '');
-    const f = opts.fetch ?? globalThis.fetch;
+  constructor(opts: AffitorOptions) {
+    if (!opts || !opts.apiKey) throw new Error('Affitor: `apiKey` is required');
+    this.apiKey = opts.apiKey;
+    this.apiUrl = (opts.apiUrl || DEFAULT_API_URL).replace(/\/+$/, '');
+    const f = opts.fetch ?? (globalThis as { fetch?: typeof fetch }).fetch;
     if (!f) throw new Error('Affitor: no global fetch — pass `options.fetch` (Node < 18)');
     this.fetchImpl = f;
   }
 
-  /** POST /api/v1/track/lead — server-mode lead (Bearer key). */
-  async trackLead(params: TrackLeadParams): Promise<TrackLeadResult> {
-    return this.request<TrackLeadResult>('POST', '/api/v1/track/lead', params, true);
-  }
+  private async post<T>(
+    path: string,
+    body: Record<string, unknown>,
+    auth: boolean,
+  ): Promise<AffitorResponse<T>> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (auth) headers.Authorization = `Bearer ${this.apiKey}`;
 
-  /** POST /api/v1/track/sale — record a sale + commission for an attributed customer. */
-  async trackSale(params: TrackSaleParams): Promise<TrackSaleResult> {
-    return this.request<TrackSaleResult>('POST', '/api/v1/track/sale', params, true);
-  }
-
-  /** POST /api/v1/track/refund — reverse the commission for a prior sale. */
-  async trackRefund(params: TrackRefundParams): Promise<TrackRefundResult> {
-    return this.request<TrackRefundResult>('POST', '/api/v1/track/refund', params, true);
+    try {
+      const res = await this.fetchImpl(`${this.apiUrl}${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(compact(body)),
+      });
+      let data: unknown = null;
+      try {
+        data = await res.json();
+      } catch {
+        /* empty / non-JSON body */
+      }
+      return {
+        ok: res.ok,
+        status: res.status,
+        data: res.ok ? (data as T) : null,
+        error: res.ok ? undefined : parseApiError(data, res.status).message,
+      };
+    } catch (err) {
+      return { ok: false, status: 0, data: null, error: (err as Error)?.message || 'network_error' };
+    }
   }
 
   /**
-   * POST /api/v1/track/click — mint (or reuse) a click id. Public endpoint,
-   * no auth. Provided for parity with affitor-node; clicks are normally
-   * captured in the browser by the loader.
+   * Track a lead/signup. Binds `customerExternalId` ↔ `clickId` so later sales
+   * resolve by `customerExternalId` alone.
    */
-  async trackClick(params: TrackClickParams = {}): Promise<TrackClickResult> {
-    return this.request<TrackClickResult>('POST', '/api/v1/track/click', params, false);
+  trackLead(input: TrackLeadInput): Promise<AffitorResponse> {
+    if (!input.customerExternalId && !input.clickId) {
+      throw new Error('Affitor.trackLead: `customerExternalId` or `clickId` is required');
+    }
+    return this.post(
+      '/api/v1/track/lead',
+      {
+        // canonical surface → live wire field
+        customer_key: input.customerExternalId,
+        click_id: input.clickId,
+        email: input.email,
+        event_name: input.eventName,
+        additional_data: input.additionalData,
+      },
+      true,
+    );
   }
 
-  /** GET /api/v1/programs/me/readiness — the 5-gate readiness verdict for this key's program. */
+  /** Track a sale. Resolves attribution by `customerExternalId` (then `clickId`). */
+  trackSale(input: TrackSaleInput): Promise<AffitorResponse> {
+    if (!input.customerExternalId && !input.clickId) {
+      throw new Error('Affitor.trackSale: `customerExternalId` or `clickId` is required');
+    }
+    if (!Number.isInteger(input.amount) || input.amount <= 0) {
+      throw new Error('Affitor.trackSale: `amount` must be a positive integer (cents)');
+    }
+    if (!input.invoiceId) {
+      throw new Error('Affitor.trackSale: `invoiceId` is required (idempotency key)');
+    }
+    return this.post(
+      '/api/v1/track/sale',
+      {
+        customer_key: input.customerExternalId,
+        click_id: input.clickId,
+        amount_cents: input.amount,
+        currency: input.currency,
+        transaction_id: input.invoiceId,
+        sale_type: input.saleType,
+        is_recurring: input.isRecurring,
+        subscription_id: input.subscriptionId,
+        subscription_interval: input.subscriptionInterval,
+        event_name: input.eventName,
+      },
+      true,
+    );
+  }
+
+  /** Track a click (usually done in the browser via affitor-sdk). Public endpoint, no auth. */
+  trackClick(input: TrackClickInput = {}): Promise<AffitorResponse> {
+    return this.post(
+      '/api/v1/track/click',
+      {
+        affiliate_url: input.affiliateUrl,
+        page_url: input.pageUrl,
+        referrer_url: input.referrerUrl,
+        existing_click_id: input.existingClickId,
+      },
+      false,
+    );
+  }
+
+  /**
+   * Reverse the commission for a sale on refund. Call from your provider's
+   * refund webhook. Full refund (amount omitted) → commission `reversed`;
+   * partial → `refunded` (proportional). Idempotent by `invoiceId`.
+   */
+  trackRefund(input: TrackRefundInput): Promise<AffitorResponse> {
+    if (!input.invoiceId) {
+      throw new Error('Affitor.trackRefund: `invoiceId` is required');
+    }
+    return this.post(
+      '/api/v1/track/refund',
+      {
+        transaction_id: input.invoiceId,
+        refund_amount_cents: input.refundAmountCents,
+        refund_reason: input.refundReason,
+      },
+      true,
+    );
+  }
+
+  /**
+   * GET /api/v1/programs/me/readiness — the 5-gate readiness verdict for this
+   * key's program. The keystone of agent-native onboarding: an agent polls it
+   * until `integration_verified: true`. Not part of affitor-node — added here.
+   *
+   * Throws `AffitorApiError` on a non-2xx response (parses both error shapes).
+   */
   async readiness(opts: { forceRecheck?: boolean } = {}): Promise<ReadinessResult> {
     const query = opts.forceRecheck ? '?force_recheck=true' : '';
-    return this.request<ReadinessResult>('GET', `/api/v1/programs/me/readiness${query}`, undefined, true);
-  }
+    const res = await this.fetchImpl(`${this.apiUrl}/api/v1/programs/me/readiness${query}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+    });
 
-  private async request<T>(
-    method: 'GET' | 'POST',
-    path: string,
-    body?: unknown,
-    auth = true,
-  ): Promise<T> {
-    const headers: Record<string, string> = {};
-    if (auth) {
-      headers.Authorization = `Bearer ${this.apiKey}`;
-    }
-    const init: RequestInit = { method, headers };
-    if (body !== undefined && method !== 'GET') {
-      headers['Content-Type'] = 'application/json';
-      init.body = JSON.stringify(body);
-    }
-
-    const response = await this.fetchImpl(`${this.apiBase}${path}`, init);
-
-    let parsed: unknown = null;
-    const text = await response.text();
+    let data: unknown = null;
+    const text = await res.text();
     if (text) {
       try {
-        parsed = JSON.parse(text);
+        data = JSON.parse(text);
       } catch {
-        parsed = text;
+        data = text;
       }
     }
 
-    if (!response.ok) {
-      throw new AffitorApiError(response.status, parsed);
+    if (!res.ok) {
+      throw new AffitorApiError(res.status, data);
     }
-
-    return parsed as T;
+    return data as ReadinessResult;
   }
 }
+
+export default Affitor;

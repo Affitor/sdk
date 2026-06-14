@@ -16,7 +16,7 @@ The SDK provides entry points for different use cases:
 |---|---|---|
 | `@affitor/sdk` | `import { loadAffitor } from '@affitor/sdk'` | Any JS/TS application |
 | `@affitor/sdk/react` | `import { AffitorProvider, useAffitor } from '@affitor/sdk/react'` | React / Next.js apps |
-| `@affitor/sdk/server` | `import { Affitor } from '@affitor/sdk/server'` | Node backends (Bearer-auth tracking) |
+| `@affitor/sdk/server` | `import Affitor from '@affitor/sdk/server'` | Node backends (Bearer-auth tracking) — drop-in for `affitor-node` |
 
 ---
 
@@ -227,52 +227,87 @@ return affitor?.hasAffiliateAttribution ? <Badge /> : null;
 
 ## Server (Node)
 
-The `@affitor/sdk/server` entry point is a Node-only client (global `fetch`, no DOM) for reporting conversions from your backend. It authenticates with your **program API key** as a Bearer token, so it must never run in the browser.
+The `@affitor/sdk/server` entry point **is** the [`affitor-node`](https://www.npmjs.com/package/affitor-node) server SDK — same ergonomic API, now shipped inside `@affitor/sdk`. It's a Node-only client (global `fetch`, no DOM) for reporting conversions from your backend. It authenticates with your **program API key** as a Bearer token, so it must never run in the browser.
+
+Attribution model (Dub-style): **bind the customer at lead time**, then a sale needs only `customerExternalId`.
 
 ```ts
-import { Affitor } from '@affitor/sdk/server';
+import Affitor from '@affitor/sdk/server';          // default import
+// import { Affitor } from '@affitor/sdk/server';   // named import — both work
 
-const affitor = new Affitor(process.env.AFFITOR_API_KEY!);
+const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
 
 // Bind the customer at lead/signup time
-await affitor.trackLead({ customer_key: user.id, click_id, email: user.email });
+await affitor.trackLead({ customerExternalId: user.id, clickId, email: user.email });
 
 // Report a sale from your payment webhook (Stripe, Polar, Lemon Squeezy, …)
 await affitor.trackSale({
-  transaction_id: invoice.id, // idempotency key — dedups retries
-  customer_key: user.id,      // resolves attribution
-  amount_cents: 4900,         // smallest currency unit
+  customerExternalId: user.id, // resolves attribution (no clickId needed after lead)
+  amount: 4900,                // integer cents
+  invoiceId: invoice.id,       // idempotency key — dedups retries
   currency: 'USD',
 });
+
+// Reverse a commission from your refund webhook
+await affitor.trackRefund({ invoiceId: invoice.id });
 ```
 
 ### Methods
 
+Every `track*` method returns a `Promise<AffitorResponse<T>>` — `{ ok, status, data, error? }` — and never throws on an HTTP error (only on missing required input).
+
 | Method | Endpoint | Description |
 |---|---|---|
-| `trackLead(params)` | `POST /api/v1/track/lead` | Bind a customer to their click. |
-| `trackSale(params)` | `POST /api/v1/track/sale` | Record a sale + commission for an attributed customer. |
-| `trackRefund(params)` | `POST /api/v1/track/refund` | Reverse the commission for a prior sale. |
-| `trackClick(params?)` | `POST /api/v1/track/click` | Mint (or reuse) a click id. Public — no auth. |
-| `readiness(opts?)` | `GET /api/v1/programs/me/readiness` | The 5-gate readiness verdict for this key's program. |
+| `trackLead(input)` | `POST /api/v1/track/lead` | Bind a customer to their click. Needs `customerExternalId` or `clickId`. |
+| `trackSale(input)` | `POST /api/v1/track/sale` | Record a sale + commission for an attributed customer. Needs `amount` (cents) + `invoiceId`. |
+| `trackRefund(input)` | `POST /api/v1/track/refund` | Reverse the commission for a prior sale. Needs `invoiceId`. |
+| `trackClick(input?)` | `POST /api/v1/track/click` | Mint (or reuse) a click id. Public — no auth. |
+| `readiness(opts?)` | `GET /api/v1/programs/me/readiness` | The 5-gate readiness verdict for this key's program. Added by `@affitor/sdk` (not in `affitor-node`). |
+
+### Key input fields (camelCase ergonomic)
+
+| Method | Field | Type | Notes |
+|---|---|---|---|
+| `trackLead` | `customerExternalId` | `string` | Your own user id — binds the customer. |
+| `trackLead` | `clickId` | `string` | Affitor click id. One of `clickId` / `customerExternalId` required. |
+| `trackSale` | `customerExternalId` | `string` | Resolves attribution. |
+| `trackSale` | `amount` | `number` | Sale amount in **integer cents**. |
+| `trackSale` | `invoiceId` | `string` | Idempotency key — dedups retries. |
+| `trackSale` | `currency` | `string` | ISO currency (default `USD`). |
+| `trackRefund` | `invoiceId` | `string` | The sale's `invoiceId`. |
+| `trackRefund` | `refundAmountCents` | `number` | Omit for a full refund. |
 
 ### Options & errors
 
 ```ts
 // Custom API base or fetch (testing, Node < 18)
-const affitor = new Affitor(apiKey, { apiBase: 'https://uat.affitor.com', fetch: myFetch });
+const affitor = new Affitor({
+  apiKey,
+  apiUrl: 'https://uat.affitor.com',
+  fetch: myFetch,
+});
 ```
 
-Non-2xx responses throw an `AffitorApiError` exposing `status`, `code`, `retryAfterSeconds`, and the raw `body`. It parses both error envelope shapes the API returns (`{ error: "..." }` and `{ error: { code, message } }`).
+`track*` methods surface HTTP errors on the resolved `AffitorResponse` (`ok: false`, `status`, `error`) — they don't throw:
 
 ```ts
-import { Affitor, AffitorApiError } from '@affitor/sdk/server';
+const res = await affitor.trackSale({ customerExternalId: 'u_1', amount: 4900, invoiceId: 'inv_1' });
+if (!res.ok) {
+  console.error(`Affitor ${res.status}: ${res.error}`);
+}
+```
+
+`readiness()` returns the bare verdict and **throws** an `AffitorApiError` on a non-2xx response, exposing `status`, `code`, `retryAfterSeconds`, and the raw `body`. It parses both error envelope shapes the API returns (`{ error: "..." }` and `{ error: { code, message, retry_after_seconds } }`):
+
+```ts
+import Affitor, { AffitorApiError } from '@affitor/sdk/server';
 
 try {
-  await affitor.trackSale({ transaction_id: 'txn_1', customer_key: 'u_1', amount_cents: 4900 });
+  const verdict = await affitor.readiness();
+  if (verdict.integration_verified) console.log('ready to go live');
 } catch (err) {
   if (err instanceof AffitorApiError) {
-    console.error(`Affitor ${err.status}: ${err.message}`);
+    console.error(`Affitor ${err.status} (${err.code}): ${err.message}`);
   }
 }
 ```
@@ -281,21 +316,32 @@ try {
 
 ## Migrating from affitor-node
 
-The server client moved into this package at `@affitor/sdk/server`. The
-constructor now takes the API key as a positional string argument (it used to
-take an options object):
+**Change the import — that's it.** `@affitor/sdk/server` is `affitor-node`'s
+exact API: same options-object constructor, same method names, same camelCase
+input fields, same `AffitorResponse`, both default and named export. It's a
+drop-in replacement.
 
 ```ts
 // Before (affitor-node)
-import { Affitor } from 'affitor-node';
+import Affitor from 'affitor-node';
 const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
+await affitor.trackSale({ customerExternalId: user.id, amount: 4900, invoiceId: inv.id });
 
-// After (@affitor/sdk)
-import { Affitor } from '@affitor/sdk/server';
-const affitor = new Affitor(process.env.AFFITOR_API_KEY!);
+// After (@affitor/sdk) — only the import changed
+import Affitor from '@affitor/sdk/server';
+const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
+await affitor.trackSale({ customerExternalId: user.id, amount: 4900, invoiceId: inv.id });
 ```
 
-Passing an object (`new Affitor({ apiKey })`) now throws a clear error.
+Both import styles work, matching `affitor-node`:
+
+```ts
+import Affitor from '@affitor/sdk/server';       // default
+import { Affitor } from '@affitor/sdk/server';   // named
+```
+
+The only addition over `affitor-node` is the [`readiness()`](#methods) method
+for agent-native onboarding.
 
 ---
 
