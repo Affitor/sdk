@@ -1,7 +1,7 @@
 {
-  "name": "@affitor/tracker",
-  "version": "2.0.0",
-  "description": "Affitor affiliate tracking SDK for JavaScript applications",
+  "name": "@affitor/sdk",
+  "version": "2.1.0",
+  "description": "Affitor affiliate tracking SDK for JavaScript — browser loader, React hooks, and a Node server client",
   "repository": {
     "type": "git",
     "url": "https://github.com/Affitor/affitor-tracker-js.git"
@@ -28,6 +28,11 @@
       "types": "./dist/react.d.ts",
       "import": "./dist/react.mjs",
       "require": "./dist/react.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.js"
     }
   },
   "files": [
