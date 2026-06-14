@@ -4,7 +4,7 @@
   "description": "Affitor affiliate tracking SDK for JavaScript — browser loader, React hooks, and a Node server client",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Affitor/affitor-tracker-js.git"
+    "url": "git+https://github.com/Affitor/affitor-tracker.git"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",

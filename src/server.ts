@@ -44,7 +44,14 @@ export interface TrackLeadParams {
   click_ids?: string[];
   session_id?: string;
   page_url?: string;
-  /** Free-form passthrough (e.g. `{ event_name, test_mode, program_id }`). */
+  /**
+   * Free-form passthrough (e.g. `{ event_name, test_mode, program_id }`).
+   *
+   * Integration-test fields (used by the onboarding wizard's synthetic
+   * verification path):
+   *   - `test_mode?: boolean` — marks the event as a synthetic test chain.
+   *   - `program_id?: number` — target program for the synthetic verification.
+   */
   additional_data?: Record<string, unknown>;
 }
 
@@ -66,6 +73,14 @@ export interface TrackSaleParams {
   subscription_id?: string;
   subscription_interval?: 'monthly' | 'quarterly' | 'annual';
   product_id?: string;
+  /**
+   * Free-form passthrough.
+   *
+   * Integration-test fields (used by the onboarding wizard's synthetic
+   * verification path):
+   *   - `test_mode?: boolean` — marks the event as a synthetic test chain.
+   *   - `program_id?: number` — target program for the synthetic verification.
+   */
   additional_data?: Record<string, unknown>;
 }
 
@@ -89,6 +104,15 @@ export interface TrackClickParams {
   referrer_url?: string;
   /** Reuse an existing click id instead of minting a new one. */
   existing_click_id?: string;
+  /**
+   * Free-form passthrough (the CMS click handler destructures it).
+   *
+   * Integration-test fields (used by the onboarding wizard's synthetic
+   * verification path):
+   *   - `test_mode?: boolean` — marks the event as a synthetic test chain.
+   *   - `program_id?: number` — target program for the synthetic verification.
+   */
+  additional_data?: Record<string, unknown>;
 }
 
 // ── Response types ──────────────────────────────────────────────────────────
@@ -207,6 +231,11 @@ export class Affitor {
    * @param opts   Optional `{ apiBase, fetch }` overrides.
    */
   constructor(apiKey: string, opts: AffitorServerOptions = {}) {
+    if (typeof apiKey !== 'string') {
+      throw new Error(
+        'Affitor: pass the API key as a string — new Affitor(apiKey), not new Affitor({ apiKey }). (Changed from affitor-node.)',
+      );
+    }
     if (!apiKey) throw new Error('Affitor: an api key is required');
     this.apiKey = apiKey;
     this.apiBase = (opts.apiBase ?? DEFAULT_API_BASE).replace(/\/+$/, '');

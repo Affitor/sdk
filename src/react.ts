@@ -1,11 +1,11 @@
 /**
- * @affitor/tracker/react
+ * @affitor/sdk/react
  *
  * React hooks and components for the Affitor tracking SDK.
  *
  * @example
  * ```tsx
- * import { AffitorProvider, useAffitor } from '@affitor/tracker/react';
+ * import { AffitorProvider, useAffitor } from '@affitor/sdk/react';
  *
  * // In your app root:
  * <AffitorProvider programId="123">

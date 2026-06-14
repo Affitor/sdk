@@ -1,5 +1,5 @@
 /**
- * @affitor/tracker/pure v2
+ * @affitor/sdk/pure v2
  *
  * Pure/deferred entry point — identical API to the default entry point
  * but makes it explicit that the script is only loaded when
@@ -7,7 +7,7 @@
  *
  * @example
  * ```ts
- * import { loadAffitor } from '@affitor/tracker/pure';
+ * import { loadAffitor } from '@affitor/sdk/pure';
  *
  * // Script only loads when this line runs:
  * const affitor = await loadAffitor('123');

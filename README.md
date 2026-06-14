@@ -279,6 +279,26 @@ try {
 
 ---
 
+## Migrating from affitor-node
+
+The server client moved into this package at `@affitor/sdk/server`. The
+constructor now takes the API key as a positional string argument (it used to
+take an options object):
+
+```ts
+// Before (affitor-node)
+import { Affitor } from 'affitor-node';
+const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
+
+// After (@affitor/sdk)
+import { Affitor } from '@affitor/sdk/server';
+const affitor = new Affitor(process.env.AFFITOR_API_KEY!);
+```
+
+Passing an object (`new Affitor({ apiKey })`) now throws a clear error.
+
+---
+
 ## Migrating from Script Tag
 
 If you're currently using the `<script>` tag approach:

@@ -1,5 +1,5 @@
 /**
- * @affitor/tracker v2
+ * @affitor/sdk v2
  *
  * Affitor affiliate tracking SDK for JavaScript applications.
  *
@@ -8,7 +8,7 @@
  *
  * @example
  * ```ts
- * import { loadAffitor } from '@affitor/tracker';
+ * import { loadAffitor } from '@affitor/sdk';
  *
  * const affitor = await loadAffitor('123');
  * await affitor?.signup('customer_123', 'user@example.com');
@@ -18,7 +18,7 @@
  * use the `/pure` entry point:
  *
  * ```ts
- * import { loadAffitor } from '@affitor/tracker/pure';
+ * import { loadAffitor } from '@affitor/sdk/pure';
  * ```
  */
 export { loadAffitor, _resetAffitor } from './loader';
