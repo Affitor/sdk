@@ -1,25 +1,26 @@
-# @affitor/tracker
+# @affitor/sdk
 
-Official JavaScript/TypeScript SDK for [Affitor](https://affitor.com) affiliate tracking. A Promise-based wrapper around the Affitor tracker script, inspired by [@stripe/stripe-js](https://github.com/stripe/stripe-js).
+Official JavaScript/TypeScript SDK for [Affitor](https://affitor.com) affiliate tracking. A Promise-based wrapper around the Affitor tracker script, inspired by [@stripe/stripe-js](https://github.com/stripe/stripe-js), plus a Node server client for reporting leads and sales from your backend.
 
 ## Install
 
 ```bash
-npm install @affitor/tracker
+npm install @affitor/sdk
 ```
 
 ## Entry Points
 
-The SDK provides two entry points for different use cases:
+The SDK provides entry points for different use cases:
 
 | Entry Point | Import | Best For |
 |---|---|---|
-| `@affitor/tracker` | `import { loadAffitor } from '@affitor/tracker'` | Any JS/TS application |
-| `@affitor/tracker/react` | `import { AffitorProvider, useAffitor } from '@affitor/tracker/react'` | React / Next.js apps |
+| `@affitor/sdk` | `import { loadAffitor } from '@affitor/sdk'` | Any JS/TS application |
+| `@affitor/sdk/react` | `import { AffitorProvider, useAffitor } from '@affitor/sdk/react'` | React / Next.js apps |
+| `@affitor/sdk/server` | `import Affitor from '@affitor/sdk/server'` | Node backends (Bearer-auth tracking) — drop-in for `affitor-node` |
 
 ---
 
-## `@affitor/tracker` — Core SDK
+## `@affitor/sdk` — Core SDK
 
 ### `loadAffitor(programId, options?)`
 
@@ -30,7 +31,7 @@ Loads the Affitor tracker script and returns a Promise that resolves to the trac
 - **Guaranteed** — the instance is always ready when the Promise resolves
 
 ```ts
-import { loadAffitor } from '@affitor/tracker';
+import { loadAffitor } from '@affitor/sdk';
 
 const affitor = await loadAffitor('59');
 ```
@@ -89,7 +90,7 @@ Once loaded, the `affitor` instance provides these methods:
 ### Example: Track Signup
 
 ```ts
-import { loadAffitor } from '@affitor/tracker';
+import { loadAffitor } from '@affitor/sdk';
 
 async function handleSignup(email: string, password: string) {
   // 1. Create the user account
@@ -109,7 +110,7 @@ async function handleSignup(email: string, password: string) {
 ### Example: Redirect to Checkout
 
 ```ts
-import { loadAffitor } from '@affitor/tracker';
+import { loadAffitor } from '@affitor/sdk';
 
 async function handleUpgrade() {
   const affitor = await loadAffitor('59');
@@ -122,7 +123,7 @@ async function handleUpgrade() {
 
 ---
 
-## `@affitor/tracker/react` — React Hooks
+## `@affitor/sdk/react` — React Hooks
 
 The React entry point provides two patterns: **Provider + hook** and **standalone hook**.
 
@@ -131,7 +132,7 @@ The React entry point provides two patterns: **Provider + hook** and **standalon
 Best when your whole app needs access to the tracker state (e.g. showing referral badges).
 
 ```tsx
-import { AffitorProvider, useAffitor } from '@affitor/tracker/react';
+import { AffitorProvider, useAffitor } from '@affitor/sdk/react';
 
 // 1. Wrap your app (layout.tsx or _app.tsx)
 export default function RootLayout({ children }) {
@@ -171,7 +172,7 @@ Returns `AffitorInstance | null`. Returns `null` while the SDK is loading.
 Use this when you don't need a provider — the hook loads the SDK on mount.
 
 ```tsx
-import { useLoadAffitor } from '@affitor/tracker/react';
+import { useLoadAffitor } from '@affitor/sdk/react';
 
 function MyComponent() {
   const affitor = useLoadAffitor('59', { debug: true });
@@ -224,6 +225,126 @@ return affitor?.hasAffiliateAttribution ? <Badge /> : null;
 
 ---
 
+## Server (Node)
+
+The `@affitor/sdk/server` entry point **is** the [`affitor-node`](https://www.npmjs.com/package/affitor-node) server SDK — same ergonomic API, now shipped inside `@affitor/sdk`. It's a Node-only client (global `fetch`, no DOM) for reporting conversions from your backend. It authenticates with your **program API key** as a Bearer token, so it must never run in the browser.
+
+Attribution model (Dub-style): **bind the customer at lead time**, then a sale needs only `customerExternalId`.
+
+```ts
+import Affitor from '@affitor/sdk/server';          // default import
+// import { Affitor } from '@affitor/sdk/server';   // named import — both work
+
+const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
+
+// Bind the customer at lead/signup time
+await affitor.trackLead({ customerExternalId: user.id, clickId, email: user.email });
+
+// Report a sale from your payment webhook (Stripe, Polar, Lemon Squeezy, …)
+await affitor.trackSale({
+  customerExternalId: user.id, // resolves attribution (no clickId needed after lead)
+  amount: 4900,                // integer cents
+  invoiceId: invoice.id,       // idempotency key — dedups retries
+  currency: 'USD',
+});
+
+// Reverse a commission from your refund webhook
+await affitor.trackRefund({ invoiceId: invoice.id });
+```
+
+### Methods
+
+Every `track*` method returns a `Promise<AffitorResponse<T>>` — `{ ok, status, data, error? }` — and never throws on an HTTP error (only on missing required input).
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `trackLead(input)` | `POST /api/v1/track/lead` | Bind a customer to their click. Needs `customerExternalId` or `clickId`. |
+| `trackSale(input)` | `POST /api/v1/track/sale` | Record a sale + commission for an attributed customer. Needs `amount` (cents) + `invoiceId`. |
+| `trackRefund(input)` | `POST /api/v1/track/refund` | Reverse the commission for a prior sale. Needs `invoiceId`. |
+| `trackClick(input?)` | `POST /api/v1/track/click` | Mint (or reuse) a click id. Public — no auth. |
+| `readiness(opts?)` | `GET /api/v1/programs/me/readiness` | The 5-gate readiness verdict for this key's program. Added by `@affitor/sdk` (not in `affitor-node`). |
+
+### Key input fields (camelCase ergonomic)
+
+| Method | Field | Type | Notes |
+|---|---|---|---|
+| `trackLead` | `customerExternalId` | `string` | Your own user id — binds the customer. |
+| `trackLead` | `clickId` | `string` | Affitor click id. One of `clickId` / `customerExternalId` required. |
+| `trackSale` | `customerExternalId` | `string` | Resolves attribution. |
+| `trackSale` | `amount` | `number` | Sale amount in **integer cents**. |
+| `trackSale` | `invoiceId` | `string` | Idempotency key — dedups retries. |
+| `trackSale` | `currency` | `string` | ISO currency (default `USD`). |
+| `trackRefund` | `invoiceId` | `string` | The sale's `invoiceId`. |
+| `trackRefund` | `refundAmountCents` | `number` | Omit for a full refund. |
+
+### Options & errors
+
+```ts
+// Custom API base or fetch (testing, Node < 18)
+const affitor = new Affitor({
+  apiKey,
+  apiUrl: 'https://uat.affitor.com',
+  fetch: myFetch,
+});
+```
+
+`track*` methods surface HTTP errors on the resolved `AffitorResponse` (`ok: false`, `status`, `error`) — they don't throw:
+
+```ts
+const res = await affitor.trackSale({ customerExternalId: 'u_1', amount: 4900, invoiceId: 'inv_1' });
+if (!res.ok) {
+  console.error(`Affitor ${res.status}: ${res.error}`);
+}
+```
+
+`readiness()` returns the bare verdict and **throws** an `AffitorApiError` on a non-2xx response, exposing `status`, `code`, `retryAfterSeconds`, and the raw `body`. It parses both error envelope shapes the API returns (`{ error: "..." }` and `{ error: { code, message, retry_after_seconds } }`):
+
+```ts
+import Affitor, { AffitorApiError } from '@affitor/sdk/server';
+
+try {
+  const verdict = await affitor.readiness();
+  if (verdict.integration_verified) console.log('ready to go live');
+} catch (err) {
+  if (err instanceof AffitorApiError) {
+    console.error(`Affitor ${err.status} (${err.code}): ${err.message}`);
+  }
+}
+```
+
+---
+
+## Migrating from affitor-node
+
+**Change the import — that's it.** `@affitor/sdk/server` is `affitor-node`'s
+exact API: same options-object constructor, same method names, same camelCase
+input fields, same `AffitorResponse`, both default and named export. It's a
+drop-in replacement.
+
+```ts
+// Before (affitor-node)
+import Affitor from 'affitor-node';
+const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
+await affitor.trackSale({ customerExternalId: user.id, amount: 4900, invoiceId: inv.id });
+
+// After (@affitor/sdk) — only the import changed
+import Affitor from '@affitor/sdk/server';
+const affitor = new Affitor({ apiKey: process.env.AFFITOR_API_KEY! });
+await affitor.trackSale({ customerExternalId: user.id, amount: 4900, invoiceId: inv.id });
+```
+
+Both import styles work, matching `affitor-node`:
+
+```ts
+import Affitor from '@affitor/sdk/server';       // default
+import { Affitor } from '@affitor/sdk/server';   // named
+```
+
+The only addition over `affitor-node` is the [`readiness()`](#methods) method
+for agent-native onboarding.
+
+---
+
 ## Migrating from Script Tag
 
 If you're currently using the `<script>` tag approach:
@@ -248,7 +369,7 @@ If you're currently using the `<script>` tag approach:
 ### After (npm SDK)
 
 ```ts
-import { loadAffitor } from '@affitor/tracker';
+import { loadAffitor } from '@affitor/sdk';
 
 // No timing issues — awaits script load automatically
 const affitor = await loadAffitor('59');
