@@ -40,7 +40,7 @@ const affitor = await loadAffitor('59');
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `env` | `'production' \| 'uat' \| 'local'` | `'production'` | Environment preset (selects the tracker script URL) |
+| `env` | `'production' \| 'local'` | `'production'` | Environment preset (selects the tracker script URL) |
 | `debug` | `boolean` | `false` | Enable debug mode (verbose console logs, cookie verification) |
 | `scriptUrl` | `string` | — | Custom script URL (overrides `env` preset) |
 
@@ -49,7 +49,6 @@ const affitor = await loadAffitor('59');
 | `env` | Script URL |
 |---|---|
 | `'production'` | `https://api.affitor.com/js/affitor-tracker.js` |
-| `'uat'` | `https://uat-affitor-cms.vanilla-ott.com/js/affitor-tracker-uat.js` |
 | `'local'` | `http://localhost:1337/js/affitor-tracker-local.js` |
 
 ```ts
@@ -58,9 +57,6 @@ const affitor = await loadAffitor('59');
 
 // Local development with debug
 const affitor = await loadAffitor('29', { env: 'local', debug: true });
-
-// UAT
-const affitor = await loadAffitor('29', { env: 'uat' });
 
 // Custom URL (overrides env)
 const affitor = await loadAffitor('29', { scriptUrl: 'https://my-cdn.com/tracker.js' });
@@ -75,6 +71,9 @@ Once loaded, the `affitor` instance provides these methods:
 | `signup(customerKey, email)` | Track a signup event. Takes the user's ID and email as positional args. Returns a Promise. |
 | `trackLead(data)` | **Deprecated.** Alias for `signup()`. Accepts `{ email, user_id }`. Use `signup()` instead. |
 | `trackTest(data?)` | Send a test event to verify tracking is working. |
+| `getClickId()` | The partner click id from the cookie, or `null`. |
+| `getVisitorId()` | The visitor id, or `null` before the first visit. Pass it to your checkout as `metadata.affitor_visitor_id` so revenue is tied to its source. |
+| `consent(granted)` | With `data-affitor-consent="required"` on the script, nothing is stored or sent until `consent(true)`; `consent(false)` removes Affitor's cookies. |
 | `redirectToCheckout(params)` | Redirect the user to the Affitor-powered checkout page. |
 
 ### Properties
@@ -283,7 +282,7 @@ Every `track*` method returns a `Promise<AffitorResponse<T>>` — `{ ok, status,
 // Custom API base or fetch (testing, Node < 18)
 const affitor = new Affitor({
   apiKey,
-  apiUrl: 'https://uat.affitor.com',
+  apiUrl: 'http://localhost:1337',
   fetch: myFetch,
 });
 ```
@@ -391,7 +390,7 @@ No more:
 | Parameter | Type | Description |
 |---|---|---|
 | `programId` | `string \| number` | Your Affitor program ID |
-| `options.env` | `'production' \| 'uat' \| 'local'` | Environment preset |
+| `options.env` | `'production' \| 'local'` | Environment preset |
 | `options.debug` | `boolean` | Enable debug mode |
 | `options.scriptUrl` | `string` | Custom script URL (overrides env) |
 

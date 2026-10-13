@@ -27,6 +27,17 @@ export interface AffitorInstance {
   /** @deprecated Use signup() instead. Kept for backward compatibility. */
   trackLead(data: TrackLeadData): Promise<void>;
   getClickId(): string | null;
+  /**
+   * The visitor id the tracker keeps in a first-party cookie, or null before the first visit
+   * (or before consent). Put it in your checkout metadata as `affitor_visitor_id` so revenue
+   * is tied to the source the visitor came from.
+   */
+  getVisitorId(): string | null;
+  /**
+   * With `data-affitor-consent="required"` on the script, nothing is stored or sent until
+   * `consent(true)`; `consent(false)` removes Affitor's cookies.
+   */
+  consent(granted: boolean): void;
   getData(): { clickId: string | null; programId: number; hasAttribution: boolean; affiliateUrl: string | null };
   trackTest(data?: TrackTestData): void;
   clickId: string | null;
