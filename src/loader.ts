@@ -1,15 +1,14 @@
 import type { AffitorInitOptions, AffitorInstance } from './types';
 
-export type AffitorEnv = 'production' | 'uat' | 'local';
+export type AffitorEnv = 'production' | 'local';
 
 const SCRIPT_URLS: Record<AffitorEnv, string> = {
   production: 'https://api.affitor.com/js/affitor-tracker.js',
-  uat: 'https://uat-affitor-cms.vanilla-ott.com/js/affitor-tracker-uat.js',
   local: 'http://localhost:1337/js/affitor-tracker-local.js',
 };
 
 export interface LoadAffitorOptions extends Omit<AffitorInitOptions, 'programId'> {
-  /** Environment preset: 'production' (default), 'uat', or 'local' */
+  /** Environment preset: 'production' (default) or 'local' */
   env?: AffitorEnv;
   /** Custom script URL (overrides env preset) */
   scriptUrl?: string;
@@ -33,9 +32,6 @@ let affitorPromise: Promise<AffitorInstance | null> | null = null;
  *
  * // Local development
  * const affitor = await loadAffitor('29', { env: 'local', debug: true });
- *
- * // UAT
- * const affitor = await loadAffitor('29', { env: 'uat' });
  *
  * // Custom URL
  * const affitor = await loadAffitor('29', { scriptUrl: 'https://my-cdn.com/tracker.js' });
