@@ -28,9 +28,9 @@ export interface AffitorInstance {
   trackLead(data: TrackLeadData): Promise<void>;
   getClickId(): string | null;
   /**
-   * The visitor id the tracker keeps in a first-party cookie, or null before the first visit
-   * (or before consent). Put it in your checkout metadata as `affitor_visitor_id` so revenue
-   * is tied to the source the visitor came from.
+   * The visitor id from Affitor's first-party cookie, or null when there is none yet. Put it in
+   * your checkout metadata as `affitor_visitor_id` so revenue is tied to the source the visitor
+   * came from. It reads the cookie only: with consent mode on, call it after `consent(true)`.
    */
   getVisitorId(): string | null;
   /**

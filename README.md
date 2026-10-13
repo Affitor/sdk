@@ -72,7 +72,7 @@ Once loaded, the `affitor` instance provides these methods:
 | `trackLead(data)` | **Deprecated.** Alias for `signup()`. Accepts `{ email, user_id }`. Use `signup()` instead. |
 | `trackTest(data?)` | Send a test event to verify tracking is working. |
 | `getClickId()` | The partner click id from the cookie, or `null`. |
-| `getVisitorId()` | The visitor id, or `null` before the first visit. Pass it to your checkout as `metadata.affitor_visitor_id` so revenue is tied to its source. |
+| `getVisitorId()` | The visitor id from Affitor's cookie, or `null` when there is none yet. Pass it to your checkout as `metadata.affitor_visitor_id` so revenue is tied to its source. With consent mode on, call it after `consent(true)`. |
 | `consent(granted)` | With `data-affitor-consent="required"` on the script, nothing is stored or sent until `consent(true)`; `consent(false)` removes Affitor's cookies. |
 | `redirectToCheckout(params)` | Redirect the user to the Affitor-powered checkout page. |
 
