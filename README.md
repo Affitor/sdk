@@ -243,7 +243,7 @@ await affitor.trackLead({ customerExternalId: user.id, clickId, email: user.emai
 await affitor.trackSale({
   customerExternalId: user.id, // resolves attribution (no clickId needed after lead)
   amount: 4900,                // integer cents, after discounts
-  taxCents: 0,                 // tax included in amount, if any (commissions use the pre-tax amount)
+  taxCents: 0,                 // tax included in amount, if any (deducted from your money-basis start date)
   invoiceId: invoice.id,       // idempotency key — dedups retries
   currency: 'USD',
 });

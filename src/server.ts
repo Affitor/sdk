@@ -57,7 +57,7 @@ export interface TrackSaleInput {
   clickId?: string;
   /** What the customer paid, after discounts, in the currency's smallest unit (integer). */
   amount: number;
-  /** The tax included in `amount`, same unit. Commissions use the pre-tax amount. */
+  /** The tax included in `amount`, same unit. Deducted from the commission basis from your account's money-basis start date; ignored before it. */
   taxCents?: number;
   /** ISO currency (default USD). */
   currency?: string;
