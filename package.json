@@ -1,6 +1,6 @@
 {
   "name": "@affitor/sdk",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "Affitor affiliate tracking SDK for JavaScript — browser loader, React hooks, and a Node server client",
   "repository": {
     "type": "git",

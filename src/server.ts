@@ -55,8 +55,10 @@ export interface TrackSaleInput {
   /** Advertiser's own user id — resolves attribution (no clickId needed once bound at lead time). */
   customerExternalId?: string;
   clickId?: string;
-  /** Sale amount in integer cents. */
+  /** What the customer paid, after discounts, in the currency's smallest unit (integer). */
   amount: number;
+  /** The tax included in `amount`, same unit. Deducted from the commission basis from your account's money-basis start date; ignored before it. */
+  taxCents?: number;
   /** ISO currency (default USD). */
   currency?: string;
   /** Idempotency key — dedups retries. */
@@ -265,6 +267,7 @@ export class Affitor {
         customer_key: input.customerExternalId,
         click_id: input.clickId,
         amount_cents: input.amount,
+        tax_cents: input.taxCents,
         currency: input.currency,
         transaction_id: input.invoiceId,
         sale_type: input.saleType,
