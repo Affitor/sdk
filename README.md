@@ -242,7 +242,8 @@ await affitor.trackLead({ customerExternalId: user.id, clickId, email: user.emai
 // Report a sale from your payment webhook (Stripe, Polar, Lemon Squeezy, …)
 await affitor.trackSale({
   customerExternalId: user.id, // resolves attribution (no clickId needed after lead)
-  amount: 4900,                // integer cents
+  amount: 4900,                // integer cents, after discounts
+  taxCents: 0,                 // tax included in amount, if any (commissions use the pre-tax amount)
   invoiceId: invoice.id,       // idempotency key — dedups retries
   currency: 'USD',
 });
