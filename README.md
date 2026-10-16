@@ -133,11 +133,11 @@ Best when your whole app needs access to the tracker state (e.g. showing referra
 ```tsx
 import { AffitorProvider, useAffitor } from '@affitor/sdk/react';
 
-// 1. Wrap your app (layout.tsx or _app.tsx)
-export default function RootLayout({ children }) {
+// 1. Wrap your app: pages/_app.tsx (Pages Router), or the root layout (Next.js App Router, below)
+export default function App({ Component, pageProps }) {
   return (
     <AffitorProvider programId="59">
-      {children}
+      <Component {...pageProps} />
     </AffitorProvider>
   );
 }
@@ -165,6 +165,29 @@ function ReferralBadge() {
 Returns `AffitorInstance | null`. Returns `null` while the SDK is loading.
 
 > **Important:** `useAffitor()` is best for reading tracker state in the UI (e.g. `hasAffiliateAttribution`, `customerCode`). For critical tracking events like `signup`, use `await loadAffitor()` directly instead — see [Which approach should I use?](#which-approach-should-i-use) below.
+
+**Next.js App Router.** From 2.1.3 the React entry is marked `"use client"`, so `app/layout.tsx` (a Server Component) can render `<AffitorProvider>` directly. On older versions, put it in a small client file and render that from the layout:
+
+```tsx
+// app/affitor-provider.tsx
+'use client';
+export { AffitorProvider } from '@affitor/sdk/react';
+```
+
+```tsx
+// app/layout.tsx
+import { AffitorProvider } from './affitor-provider';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <AffitorProvider programId="59">{children}</AffitorProvider>
+      </body>
+    </html>
+  );
+}
+```
 
 ### Pattern B: `useLoadAffitor()` (Standalone)
 

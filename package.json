@@ -1,6 +1,6 @@
 {
   "name": "@affitor/sdk",
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "Affitor affiliate tracking SDK for JavaScript — browser loader, React hooks, and a Node server client",
   "repository": {
     "type": "git",
@@ -39,7 +39,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/use-client.mjs",
     "dev": "tsup --watch",
     "prepublishOnly": "npm run build"
   },
