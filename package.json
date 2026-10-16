@@ -40,7 +40,7 @@
   ],
   "scripts": {
     "build": "tsup && node scripts/use-client.mjs",
-    "dev": "tsup --watch",
+    "dev": "tsup --watch --onSuccess \"node scripts/use-client.mjs\"",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
